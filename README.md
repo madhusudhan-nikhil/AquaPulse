@@ -1,5 +1,7 @@
 # AquaPulse — Modular Aquarium Management Dashboard Template
 
+![AquaPulse Aquarium Management Dashboard Banner](assets/aquapulse-banner.jpg)
+
 AquaPulse is a lightweight, zero-dependency aquarium command dashboard for freshwater and planted community tanks. Built with clean vanilla JavaScript and Tailwind CSS, it provides real-time water chemistry tracking, interactive aquascape flow simulation, intelligent medicine dosing, species risk auditing, and automated biological parameter derivation.
 
 ---
@@ -61,6 +63,8 @@ AquaPulse is a lightweight, zero-dependency aquarium command dashboard for fresh
 
 ```text
 AquaPulse/
+├── assets/
+│   └── aquapulse-banner.jpg   # Project showcase hero banner
 ├── AquaPulse.html             # Dynamic UI, interactive tank map, form controls & tabs
 ├── aquapulse.config.js        # Default demo configuration (120L community template)
 ├── aquapulse.private.js       # 🔒 Your personal tank config (git-ignored, optional)
