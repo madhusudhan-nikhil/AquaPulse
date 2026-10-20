@@ -114,7 +114,7 @@ AquaPulse ships with a generic 120L demo tank. To configure it for your own aqua
 2. **Edit `aquapulse.private.js`:**
    - Change `AQUAPULSE_DEFAULT_CONFIG` to `AQUAPULSE_PRIVATE_CONFIG`
    - Update tank dimensions, species, foods, medicines, and schedules to match your setup
-3. **Open `AquaPulse.html`** — your private config automatically overrides the demo defaults
+3. **Serve & open `AquaPulse.html`** via a local HTTP server (see [How to Run](#-how-to-run--use)) — your private config automatically overrides the demo defaults
 4. **Your private config is git-ignored** and will never be committed to the repository
 
 Alternatively, use the built-in **⚙️ Template Profile** editor in the app to customize everything visually.
@@ -123,9 +123,23 @@ Alternatively, use the built-in **⚙️ Template Profile** editor in the app to
 
 ## 🚀 How to Run & Use
 
-1. **Zero Setup Required:**
-   - Double-click [`AquaPulse.html`](./AquaPulse.html) in any browser (Chrome, Edge, Firefox, Safari).
-   - No servers, Node.js, bundlers, or build steps are required.
+> [!IMPORTANT]
+> AquaPulse uses ES modules (`<script type="module">`). Browsers block module imports
+> over the `file://` protocol due to CORS restrictions. **You must serve the files via a
+> local HTTP server** — double-clicking the HTML file will show a blank page.
+
+1. **Start a Local Server** (pick any method):
+   ```bash
+   # Python (built-in)
+   cd AquaPulse
+   python -m http.server 8080
+
+   # Node.js (npx, no install)
+   npx serve .
+
+   # VS Code — install the "Live Server" extension and click "Go Live"
+   ```
+   Then open **http://localhost:8080/AquaPulse.html** (or `index.html`) in your browser.
 
 2. **Deriving Optimal Parameters for Your Fish:**
    - Go to **Tab 3 (Fish Species)** or open the **⚙️ Template Profile** modal.

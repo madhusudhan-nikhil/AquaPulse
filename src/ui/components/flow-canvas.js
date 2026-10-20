@@ -1,34 +1,194 @@
 /**
- * AquaPulse Interactive Flow Canvas Component (10x Edition)
+ * AquaPulse Interactive Flow Canvas Component (10x Master Aquascaper Edition)
  *
  * Major Overhaul Features:
  * 1. Realistic Hardware Rendering:
- *    - Dual-compartment canister/internal filter with visible mechanical sponge & bio-ceramic media.
- *    - Powerhead motor with pulsing telemetry status LED and venturi bubble nozzle.
- *    - Submersible heater with glowing nichrome coils and thermal convection shimmer waves.
- *    - Overhead full-spectrum LED bar with realistic light beam cones and photoperiod telemetry.
+ *    - Dual-compartment canister/internal filter with visible mechanical sponge & bio-ceramic rings.
+ *    - Powerhead motor with pulsing telemetry status LED and venturi micro-bubble nozzle.
+ *    - Submersible quartz heater with glowing nichrome coils and animated thermal convection waves.
+ *    - Overhead full-spectrum LED light bar with realistic downward light cones.
  * 2. Three Lighting Spectrum Modes (Daylight 6500K, Sunset 3000K, Moonlight 460nm).
  * 3. Living Fish Locomotion & Flow Reaction AI:
- *    - Organic morphology (Angelfish, Tetras with iridescent stripes, Denison Barbs, Corydoras with barbels, Bettas).
- *    - Articulated multi-segment tail waggle physics and schooling cohesion.
- *    - Rheotaxis: high-flow lovers swim against current; low-flow fish retreat to shelter pockets.
- * 4. Rich Aquascape & Hydrodynamic Physics:
- *    - Branching Spiderwood with Anubias clusters and swayed moss pads.
- *    - Swaying background Vallisneria and emersed trailing Pothos riparium roots.
- *    - Dynamic caustic prisms dancing on wood and textured substrate pebbles.
- *    - Interactive click HUD for equipment, fish species, and feeding drop zones.
+ *    - Organic anatomy (Angelfish, Neon Tetras with iridescent glowing stripes, Denison Barbs, Albino Corydoras with barbels, Bettas).
+ *    - Multi-segment undulating spine & articulated caudal fin waggle physics.
+ *    - Rheotaxis: high-flow species cruise upstream in the jet; low-flow fish seek shelter behind driftwood.
+ *    - Schooling cohesion: tetras school and dart in coordinated clusters.
+ *    - Natural rendering: Clean, cinematic fish without permanent text badges covering them (hover/click for inspector).
+ * 4. Rich Nature Aquarium Hardscape:
+ *    - Multi-branching twisted Spiderwood roots with bark striations and wood grain.
+ *    - Rich dark aquasoil substrate bed with textured pebbles and carpeting plant tufts.
+ *    - Dynamic live plants: swaying background Vallisneria, Java moss cushions, Anubias nana epiphytes, trailing Pothos riparium roots.
+ *    - Dynamic shimmering caustic light network and surface ripples.
+ * 5. Interactive Feeding & Inspection:
+ *    - Click anywhere to drop sinking food pellets; nearby fish detect and swim toward the food!
+ *    - Click/hover inspection HUD for equipment, fish, and feeding zones.
  */
 
-// Universal import for FlowEngine
-let FlowEngine;
-if (typeof require !== 'undefined') {
-  try {
-    FlowEngine = require('../../engines/flow-engine.js');
-    if (FlowEngine.FlowEngine) FlowEngine = FlowEngine.FlowEngine;
-  } catch (_) {}
-}
-if (!FlowEngine && typeof globalThis !== 'undefined' && globalThis.FlowEngine) {
-  FlowEngine = globalThis.FlowEngine;
+import { FlowEngine as ImportedFlowEngine } from '../../engines/flow-engine.js';
+
+const FallbackFlowEngine = {
+  particleCount: 120,
+  LIGHTING_MODES: {
+    daylight: {
+      id: 'daylight',
+      name: '☀️ Daylight (6500K)',
+      tempK: 6500,
+      ambientTop: 'rgba(6, 182, 212, 0.12)',
+      ambientMid: 'rgba(14, 116, 144, 0.16)',
+      ambientBottom: 'rgba(2, 6, 23, 0.70)',
+      causticAlpha: 0.15,
+      shimmerColor: 'rgba(207, 250, 254, 0.25)',
+      lightRayColor: 'rgba(255, 255, 255, 0.16)'
+    },
+    sunset: {
+      id: 'sunset',
+      name: '🌅 Sunset / Dusk (3000K)',
+      tempK: 3000,
+      ambientTop: 'rgba(245, 158, 11, 0.15)',
+      ambientMid: 'rgba(180, 83, 9, 0.18)',
+      ambientBottom: 'rgba(15, 23, 42, 0.82)',
+      causticAlpha: 0.09,
+      shimmerColor: 'rgba(254, 215, 170, 0.25)',
+      lightRayColor: 'rgba(251, 191, 36, 0.14)'
+    },
+    moonlight: {
+      id: 'moonlight',
+      name: '🌙 Moonlight / Actinic (460nm)',
+      tempK: 12000,
+      ambientTop: 'rgba(30, 58, 138, 0.28)',
+      ambientMid: 'rgba(15, 23, 42, 0.40)',
+      ambientBottom: 'rgba(2, 6, 23, 0.92)',
+      causticAlpha: 0.05,
+      shimmerColor: 'rgba(147, 197, 253, 0.18)',
+      lightRayColor: 'rgba(96, 165, 250, 0.10)'
+    }
+  },
+  getNozzleCoords(dim = { width: 800, height: 384 }) {
+    const w = Number(dim.width) || 800;
+    const h = Number(dim.height) || 384;
+    return { x: w - (w > 600 ? 155 : 135), y: h * 0.15 };
+  },
+  getEquipmentBounds(w = 800, h = 384) {
+    const filterW = w > 600 ? 76 : 64;
+    const filterH = Math.min(h * 0.72, 240);
+    const filterX = w - filterW - 16;
+    const filterY = 18;
+    return {
+      filter: { x: filterX, y: filterY, w: filterW, h: filterH },
+      heater: { x: filterX - 26, y: filterY + 12, w: 18, h: filterH * 0.78 },
+      led: { x: w * 0.12, y: 2, w: w * 0.76, h: 10 }
+    };
+  },
+  initParticles(count = 95, width = 800, height = 384, mode = 'current') {
+    const p = [];
+    for (let i = 0; i < count; i++) {
+      p.push({
+        x: Math.random() * width,
+        y: Math.random() * (height * 0.72) + 15,
+        vx: mode === 'current' ? -(3.5 + Math.random() * 4) : -(1.2 + Math.random() * 2),
+        vy: (Math.random() - 0.5) * 1.4,
+        size: 1 + Math.random() * 2.2,
+        alpha: 0.3 + Math.random() * 0.5,
+        life: Math.floor(Math.random() * 100)
+      });
+    }
+    return p;
+  },
+  updatePhysics(particles, mode, dim = { width: 800, height: 384 }) {
+    const w = dim.width || 800;
+    const h = dim.height || 384;
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life = (p.life || 0) + 1;
+      if (mode === 'current') {
+        p.vy -= 0.018; // Buoyancy upward drift
+        if (p.x < w * 0.12) { p.vx *= 0.6; p.vy += 0.75; } // Glass pane deflection downward
+        if (p.x < 12 || p.y < 8 || p.y > h * 0.86 || p.life > 140) {
+          p.x = w - 155; p.y = h * 0.15; p.vx = -(4.2 + Math.random() * 5); p.vy = (Math.random() - 0.4) * 1.2; p.life = 0;
+        }
+      } else {
+        // Convective roll
+        if (p.y > h * 0.62) p.vx += 0.045; else p.vx -= 0.02;
+        p.vy += 0.01;
+        if (p.x < 15 || p.x > w * 0.95 || p.y < 10 || p.y > h * 0.86 || p.life > 180) {
+          p.x = w - 135; p.y = h * 0.15; p.vx = -(1.5 + Math.random() * 2); p.vy = Math.random() * 1.5 + 0.4; p.life = 0;
+        }
+      }
+    }
+    return particles;
+  },
+  updateFishAI(fishList, mode, width, height) {
+    const now = Date.now();
+    for (let i = 0; i < fishList.length; i++) {
+      const f = fishList[i];
+      let tx = f.baseX || 0.5;
+      let ty = f.baseY || 0.5;
+
+      if (f.flowPreference === 'low') {
+        if (mode === 'current') { tx = 0.84; ty = 0.82; f.isSheltering = true; }
+        else { tx = f.baffledX || 0.35; ty = f.baffledY || 0.30; f.isSheltering = false; }
+      } else if (f.flowPreference === 'high') {
+        if (mode === 'current') {
+          tx = 0.60 + Math.sin(now * 0.001 + i) * 0.08;
+          ty = 0.22 + Math.cos(now * 0.0015 + i) * 0.04;
+          f.isSheltering = false;
+        } else {
+          tx = f.baffledX || 0.50;
+          ty = f.baffledY || 0.40;
+        }
+      } else {
+        // Moderate: calm natural cruising
+        tx = (f.baseX || 0.45) + Math.sin(now * 0.0008 + i * 1.8) * 0.05;
+        ty = (f.baseY || 0.45) + Math.cos(now * 0.0012 + i) * 0.03;
+      }
+
+      // Schooling cohesion for schoolers
+      if (f.isSchooler && i > 0 && fishList[i - 1]?.isSchooler) {
+        const lead = fishList[i - 1];
+        tx = lead.x + 0.035;
+        ty = lead.y + (i % 2 === 0 ? 0.025 : -0.025);
+      }
+
+      f.x = (f.x || tx) + (tx - (f.x || tx)) * 0.035;
+      f.y = (f.y || ty) + (ty - (f.y || ty)) * 0.035;
+      f.hoverOffset = Math.sin(now * 0.003 + i * 1.5) * 0.015;
+      f.currentTailAngle = Math.sin(now * 0.006 * (f.tailSpeed || 3.0) + i) * 0.32;
+    }
+    return fishList;
+  },
+  getStreamlines(mode, w, h) {
+    if (mode === 'current') {
+      return [
+        { type: 'bezier', start: { x: w - 155, y: h * 0.15 - 12 }, cp1: { x: w * 0.55, y: h * 0.10 }, cp2: { x: w * 0.30, y: h * 0.18 }, end: { x: w * 0.10, y: h * 0.28 } },
+        { type: 'bezier', start: { x: w - 155, y: h * 0.15 }, cp1: { x: w * 0.55, y: h * 0.15 }, cp2: { x: w * 0.30, y: h * 0.22 }, end: { x: w * 0.10, y: h * 0.30 } },
+        { type: 'bezier', start: { x: w - 155, y: h * 0.15 + 12 }, cp1: { x: w * 0.55, y: h * 0.20 }, cp2: { x: w * 0.30, y: h * 0.26 }, end: { x: w * 0.10, y: h * 0.32 } },
+        { type: 'bezier', start: { x: w * 0.15, y: h * 0.80 }, cp1: { x: w * 0.40, y: h * 0.83 }, cp2: { x: w * 0.65, y: h * 0.82 }, end: { x: w * 0.84, y: h * 0.72 } }
+      ];
+    } else {
+      return [
+        { type: 'ellipse', cx: w * 0.5, cy: h * 0.46, rx: w * 0.38, ry: h * 0.26 },
+        { type: 'ellipse', cx: w * 0.5, cy: h * 0.46, rx: w * 0.22, ry: h * 0.15 }
+      ];
+    }
+  }
+};
+
+const FlowEngine = (ImportedFlowEngine && ImportedFlowEngine.LIGHTING_MODES) 
+  ? ImportedFlowEngine 
+  : ((typeof globalThis !== 'undefined' && globalThis.FlowEngine && globalThis.FlowEngine.LIGHTING_MODES) 
+    ? globalThis.FlowEngine 
+    : FallbackFlowEngine);
+
+function safeDrawRect(ctx, x, y, w, h, r = 4) {
+  if (typeof ctx.roundRect === 'function') {
+    try {
+      ctx.roundRect(x, y, w, h, typeof r === 'number' ? r : 4);
+      return;
+    } catch (_) {}
+  }
+  ctx.rect(x, y, w, h);
 }
 
 export class FlowCanvas {
@@ -56,6 +216,7 @@ export class FlowCanvas {
       bubbles: true,
       caustics: true,
       feedingZones: false,
+      labels: false, // Default false for clean cinematic view
       ...(options.layers || {})
     };
 
@@ -69,16 +230,19 @@ export class FlowCanvas {
     this.caustics = [];
     this.fishList = [];
     this.foodParticles = [];
-    this.selectedEntity = null; // Equipment or Fish inspector state
+    this.selectedEntity = null;
+    this.hoveredFish = null;
+    this.mousePos = { x: -100, y: -100 };
 
     this._animId = null;
     this._isPaused = false;
     this._isVisible = true;
     this._resizeObserver = null;
-    this._intersectionObserver = null;
     this._boundVisibilityChange = this._handleVisibilityChange.bind(this);
     this._boundResize = this._handleResize.bind(this);
     this._boundClick = this._handleCanvasClick.bind(this);
+    this._boundMouseMove = this._handleMouseMove.bind(this);
+    this._boundMouseLeave = this._handleMouseLeave.bind(this);
   }
 
   mount(container) {
@@ -96,6 +260,9 @@ export class FlowCanvas {
       window.addEventListener('resize', this._boundResize);
     }
 
+    // Immediate initial draw to ensure canvas is NEVER blank
+    this._handleResize();
+    this.draw();
     this.resume();
   }
 
@@ -111,13 +278,11 @@ export class FlowCanvas {
       this._resizeObserver.disconnect();
       this._resizeObserver = null;
     }
-    if (this._intersectionObserver) {
-      this._intersectionObserver.disconnect();
-      this._intersectionObserver = null;
-    }
 
     if (this.canvas) {
       this.canvas.removeEventListener('click', this._boundClick);
+      this.canvas.removeEventListener('mousemove', this._boundMouseMove);
+      this.canvas.removeEventListener('mouseleave', this._boundMouseLeave);
     }
 
     if (this.container && typeof this.container.innerHTML === 'string') {
@@ -170,11 +335,15 @@ export class FlowCanvas {
             </label>
             <label class="flex items-center gap-1.5 px-2 py-1 bg-slate-800/80 hover:bg-slate-800 rounded-lg cursor-pointer text-slate-300">
               <input type="checkbox" data-layer="streamlines" class="layer-toggle rounded border-slate-700 text-cyan-500 focus:ring-0" ${this.layers.streamlines ? 'checked' : ''}>
-              <span>🌊 Streamlines</span>
+              <span>🌊 Flow</span>
             </label>
             <label class="flex items-center gap-1.5 px-2 py-1 bg-slate-800/80 hover:bg-slate-800 rounded-lg cursor-pointer text-slate-300">
               <input type="checkbox" data-layer="heatmap" class="layer-toggle rounded border-slate-700 text-cyan-500 focus:ring-0" ${this.layers.heatmap ? 'checked' : ''}>
               <span>🌡️ Heatmap</span>
+            </label>
+            <label class="flex items-center gap-1.5 px-2 py-1 bg-slate-800/80 hover:bg-slate-800 rounded-lg cursor-pointer text-slate-300">
+              <input type="checkbox" data-layer="labels" class="layer-toggle rounded border-slate-700 text-cyan-500 focus:ring-0" ${this.layers.labels ? 'checked' : ''}>
+              <span>🏷️ Badges</span>
             </label>
             <label class="flex items-center gap-1.5 px-2 py-1 bg-slate-800/80 hover:bg-slate-800 rounded-lg cursor-pointer text-slate-300">
               <input type="checkbox" data-layer="feedingZones" class="layer-toggle rounded border-slate-700 text-cyan-500 focus:ring-0" ${this.layers.feedingZones ? 'checked' : ''}>
@@ -184,26 +353,26 @@ export class FlowCanvas {
         </div>
 
         <!-- Canvas Viewport -->
-        <div class="canvas-viewport relative w-full h-[360px] sm:h-[440px] md:h-[520px] bg-gradient-to-b from-slate-950 via-cyan-950/20 to-slate-950 overflow-hidden">
-          <canvas id="flow-particles-canvas" class="w-full h-full block cursor-pointer"></canvas>
+        <div class="canvas-viewport relative w-full h-[360px] sm:h-[440px] md:h-[500px] bg-gradient-to-b from-slate-950 via-cyan-950/20 to-slate-950 overflow-hidden">
+          <canvas id="flow-particles-canvas" class="w-full h-full block cursor-crosshair"></canvas>
 
           <!-- Interactive Inspector Modal / HUD Overlay -->
-          <div id="canvas-hud-overlay" class="absolute top-4 left-4 z-30 hidden max-w-sm p-3.5 rounded-xl bg-slate-950/90 backdrop-blur-md border border-cyan-400/40 shadow-2xl text-xs space-y-2 animate-fade-in">
+          <div id="canvas-hud-overlay" class="absolute top-4 left-4 z-30 hidden max-w-sm p-3.5 rounded-xl bg-slate-950/95 backdrop-blur-md border border-cyan-400/50 shadow-2xl text-xs space-y-2 animate-fade-in">
             <div class="flex items-center justify-between border-b border-slate-800 pb-1.5">
               <span id="hud-title" class="font-bold text-cyan-300 flex items-center gap-1.5"></span>
-              <button type="button" id="hud-close-btn" class="text-slate-400 hover:text-white font-bold px-1">✕</button>
+              <button type="button" id="hud-close-btn" class="text-slate-400 hover:text-white font-bold px-1.5 py-0.5 rounded hover:bg-slate-800">✕</button>
             </div>
             <div id="hud-body" class="text-slate-300 text-[11px] leading-relaxed"></div>
           </div>
 
           <!-- Bottom Telemetry HUD Bar -->
           <div class="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/85 backdrop-blur-md border border-cyan-500/30 text-[11px] text-slate-200">
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/85 backdrop-blur-md border border-cyan-500/30 text-[11px] text-slate-200 shadow-lg">
               <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span id="flow-status-text">${this.mode === 'current' ? 'High-Velocity Venturi Jet Active (1750 L/h)' : 'Baffled Convection Gyre: Calm Upper Film'}</span>
+              <span id="flow-status-text">${this.mode === 'current' ? 'Venturi Jet Active (1750 L/h) • Rheotaxis High-Flow Zone' : '45° Baffled Convection Gyre • Calm Upper Film'}</span>
             </div>
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/85 backdrop-blur-md border border-slate-800 text-[10px] text-slate-400">
-              <span>💡 Click on any equipment, fish, or zone to inspect details</span>
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-950/85 backdrop-blur-md border border-slate-800 text-[10px] text-slate-400 shadow-lg">
+              <span>💡 Click water to feed fish • Click hardware or fish to inspect</span>
             </div>
           </div>
         </div>
@@ -214,6 +383,8 @@ export class FlowCanvas {
     if (this.canvas && typeof this.canvas.getContext === 'function') {
       this.ctx = this.canvas.getContext('2d');
       this.canvas.addEventListener('click', this._boundClick);
+      this.canvas.addEventListener('mousemove', this._boundMouseMove);
+      this.canvas.addEventListener('mouseleave', this._boundMouseLeave);
     }
 
     const hudClose = this.container.querySelector('#hud-close-btn');
@@ -224,7 +395,6 @@ export class FlowCanvas {
     }
 
     this._attachControlListeners();
-    this._handleResize();
   }
 
   _attachControlListeners() {
@@ -265,28 +435,15 @@ export class FlowCanvas {
       });
       this._resizeObserver.observe(this.container);
     }
-
-    if (typeof IntersectionObserver !== 'undefined' && this.canvas) {
-      this._intersectionObserver = new IntersectionObserver((entries) => {
-        for (const entry of entries) {
-          this._isVisible = entry.isIntersecting;
-          if (this._isVisible) {
-            this.resume();
-          } else {
-            this.pause();
-          }
-        }
-      }, { threshold: 0.05 });
-      this._intersectionObserver.observe(this.canvas);
-    }
   }
 
   _handleVisibilityChange() {
     if (typeof document !== 'undefined') {
       if (document.hidden || document.visibilityState === 'hidden') {
         this.pause();
-      } else if (this._isVisible) {
+      } else {
         this.resume();
+        this.draw();
       }
     }
   }
@@ -296,10 +453,10 @@ export class FlowCanvas {
 
     const rect = this.canvas.getBoundingClientRect();
     const w = rect.width || this.canvas.parentElement?.offsetWidth || 800;
-    const h = rect.height || this.canvas.parentElement?.offsetHeight || 384;
+    const h = rect.height || this.canvas.parentElement?.offsetHeight || 440;
 
-    this.width = Math.max(200, Math.round(w));
-    this.height = Math.max(150, Math.round(h));
+    this.width = Math.max(320, Math.round(w));
+    this.height = Math.max(220, Math.round(h));
 
     const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
     this.canvas.width = Math.round(this.width * dpr);
@@ -308,48 +465,90 @@ export class FlowCanvas {
     if (this.ctx) {
       this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
+
+    // Immediately re-draw so canvas is never blank
+    this.draw();
   }
 
   _initPhysics() {
-    if (FlowEngine && typeof FlowEngine.initParticles === 'function') {
-      this.particles = FlowEngine.initParticles(120, this.width, this.height, this.mode);
-    } else {
-      this.particles = [];
-      for (let i = 0; i < 100; i++) {
-        this.particles.push({
-          x: Math.random() * this.width,
-          y: Math.random() * this.height * 0.7 + 20,
-          vx: -(Math.random() * 4 + 2),
-          vy: (Math.random() - 0.5) * 1.0,
-          size: Math.random() * 2 + 1,
-          alpha: Math.random() * 0.5 + 0.3,
-          life: Math.floor(Math.random() * 100)
-        });
-      }
-    }
+    this.particles = FlowEngine.initParticles(95, this.width, this.height, this.mode);
 
-    // Initialize caustics bands
+    // Initialize shimmering caustics bands
     this.caustics = [];
     for (let i = 0; i < 10; i++) {
       this.caustics.push({
         x: (i / 10) * this.width,
-        width: 30 + Math.random() * 40,
-        speed: 0.006 + Math.random() * 0.005,
+        width: 32 + Math.random() * 45,
+        speed: 0.005 + Math.random() * 0.006,
         phase: Math.random() * Math.PI * 2
       });
     }
 
-    // Inhabitant fish roster with morphology and flow preferences
+    // Build dynamic fish roster from store / config if available
+    this._buildFishRoster();
+  }
+
+  _buildFishRoster() {
+    const storeSpecies = this.store ? this.store.getState('species') : null;
+    const configSpecies = storeSpecies || (typeof window !== 'undefined' && window.activeConfig?.species) || null;
+
+    if (Array.isArray(configSpecies) && configSpecies.length > 0) {
+      this.fishList = [];
+      const palettes = {
+        'denison-barb': { color: '#e11d48', secondary: '#facc15', species: 'barb', size: 19, speed: 5.8, flow: 'high', zone: 'mid' },
+        'silver-tip-tetra': { color: '#f59e0b', secondary: '#ffffff', species: 'tetra', isSchooler: true, size: 13, speed: 4.6, flow: 'moderate', zone: 'mid' },
+        'albino-corydoras': { color: '#fef08a', secondary: '#f472b6', species: 'cory', size: 14, speed: 2.2, flow: 'low', zone: 'bottom' },
+        'female-betta': { color: '#ec4899', secondary: '#818cf8', species: 'betta', size: 15, speed: 1.6, flow: 'low', zone: 'top' },
+        'zebra-nerite-snail': { color: '#d97706', secondary: '#1e293b', species: 'snail', size: 10, speed: 0.4, flow: 'moderate', zone: 'bottom' },
+        'neon-tetra': { color: '#06b6d4', secondary: '#ef4444', species: 'tetra', isSchooler: true, size: 12, speed: 4.8, flow: 'moderate', zone: 'mid' },
+        'angelfish': { color: '#f59e0b', secondary: '#ffffff', species: 'cichlid', size: 22, speed: 2.0, flow: 'moderate', zone: 'mid' }
+      };
+
+      const zoneDefaults = {
+        top: { y: 0.22, range: 0.08 },
+        mid: { y: 0.45, range: 0.14 },
+        bottom: { y: 0.88, range: 0.04 }
+      };
+
+      configSpecies.forEach((sp, idx) => {
+        const p = palettes[sp.id] || {
+          color: '#38bdf8', secondary: '#ffffff', species: 'mid', size: 14, speed: 3.5, flow: 'moderate', zone: 'mid'
+        };
+        const zoneInfo = zoneDefaults[p.zone] || zoneDefaults.mid;
+        const xPos = 0.18 + ((idx / Math.max(configSpecies.length - 1, 1)) * 0.58);
+        const yPos = zoneInfo.y + (Math.sin(idx * 2.3) * zoneInfo.range * 0.5);
+
+        this.fishList.push({
+          id: sp.id,
+          name: sp.name,
+          count: sp.count || 1,
+          species: p.species,
+          isSchooler: !!p.isSchooler,
+          baseX: xPos,
+          baseY: yPos,
+          x: xPos,
+          y: yPos,
+          baffledX: xPos + (Math.cos(idx) * 0.06),
+          baffledY: yPos,
+          color: p.color,
+          secondaryColor: p.secondary,
+          tailSpeed: p.speed,
+          size: p.size,
+          flowPreference: p.flow,
+          zone: p.zone
+        });
+      });
+      return;
+    }
+
+    // Default High-Fidelity Community Roster
     this.fishList = [
-      { id: 'angel-koi', name: 'Koi Angelfish', species: 'cichlid', count: 4, baseX: 0.40, baseY: 0.42, color: '#f59e0b', secondaryColor: '#ffffff', tailSpeed: 2.2, size: 22, flowPreference: 'moderate', zone: 'mid' },
-      { id: 'angel-zebra', name: 'Blue Zebra Angelfish', species: 'cichlid', count: 8, baseX: 0.56, baseY: 0.45, color: '#64748b', secondaryColor: '#38bdf8', tailSpeed: 2.0, size: 20, flowPreference: 'moderate', zone: 'mid' },
-      { id: 'denison-barb', name: 'Denison Barb', species: 'barb', count: 8, baseX: 0.65, baseY: 0.22, color: '#e11d48', secondaryColor: '#facc15', tailSpeed: 6.0, size: 18, flowPreference: 'high', zone: 'mid' },
-      { id: 'rainbow', name: "Boeseman's Rainbow", species: 'rainbow', count: 8, baseX: 0.60, baseY: 0.34, color: '#0284c7', secondaryColor: '#f59e0b', tailSpeed: 4.5, size: 17, flowPreference: 'high', zone: 'mid' },
-      { id: 'neon-tetra', name: 'Neon Tetra', species: 'tetra', count: 15, isSchooler: true, baseX: 0.28, baseY: 0.38, color: '#06b6d4', secondaryColor: '#ef4444', tailSpeed: 4.8, size: 12, flowPreference: 'moderate', zone: 'mid' },
-      { id: 'silvertip', name: 'Silver Tip Tetra', species: 'tetra', count: 11, isSchooler: true, baseX: 0.35, baseY: 0.48, color: '#f59e0b', secondaryColor: '#f8fafc', tailSpeed: 4.5, size: 13, flowPreference: 'moderate', zone: 'mid' },
-      { id: 'betta-female', name: 'Female Betta', species: 'betta', count: 3, baseX: 0.22, baseY: 0.26, baffledX: 0.18, baffledY: 0.22, color: '#ec4899', secondaryColor: '#a855f7', tailSpeed: 1.6, size: 14, flowPreference: 'low', zone: 'top' },
-      { id: 'dwarf-gourami', name: 'Dwarf Red Gourami', species: 'gourami', count: 1, baseX: 0.85, baseY: 0.82, baffledX: 0.25, baffledY: 0.25, color: '#f43f5e', secondaryColor: '#38bdf8', tailSpeed: 1.4, size: 16, flowPreference: 'low', zone: 'top' },
-      { id: 'corydoras', name: 'Albino Corydoras', species: 'cory', count: 6, baseX: 0.25, baseY: 0.90, color: '#fde047', secondaryColor: '#fbcfe8', tailSpeed: 2.2, size: 13, flowPreference: 'low', zone: 'bottom' }
+      { id: 'angel-koi', name: 'Koi Angelfish', species: 'cichlid', count: 4, baseX: 0.40, baseY: 0.42, color: '#f59e0b', secondaryColor: '#ffffff', tailSpeed: 2.2, size: 23, flowPreference: 'moderate', zone: 'mid' },
+      { id: 'denison-barb', name: 'Denison Barb', species: 'barb', count: 8, baseX: 0.65, baseY: 0.24, color: '#e11d48', secondaryColor: '#facc15', tailSpeed: 5.8, size: 19, flowPreference: 'high', zone: 'mid' },
+      { id: 'neon-tetra', name: 'Neon Tetra', species: 'tetra', count: 15, isSchooler: true, baseX: 0.28, baseY: 0.38, color: '#06b6d4', secondaryColor: '#ef4444', tailSpeed: 4.8, size: 13, flowPreference: 'moderate', zone: 'mid' },
+      { id: 'silvertip', name: 'Silver Tip Tetra', species: 'tetra', count: 11, isSchooler: true, baseX: 0.34, baseY: 0.46, color: '#f59e0b', secondaryColor: '#f8fafc', tailSpeed: 4.5, size: 13, flowPreference: 'moderate', zone: 'mid' },
+      { id: 'betta-female', name: 'Female Betta', species: 'betta', count: 3, baseX: 0.22, baseY: 0.25, baffledX: 0.18, baffledY: 0.22, color: '#ec4899', secondaryColor: '#a855f7', tailSpeed: 1.6, size: 15, flowPreference: 'low', zone: 'top' },
+      { id: 'corydoras', name: 'Albino Corydoras', species: 'cory', count: 6, baseX: 0.25, baseY: 0.89, color: '#fef08a', secondaryColor: '#f472b6', tailSpeed: 2.2, size: 14, flowPreference: 'low', zone: 'bottom' }
     ];
   }
 
@@ -357,31 +556,31 @@ export class FlowCanvas {
     if (mode !== 'current' && mode !== 'baffled') return;
     this.mode = mode;
 
-    if (this.store) {
-      this.store.setState('simulation.mode', mode);
-    }
-    if (this.eventBus) {
-      this.eventBus.emit('flow:mode_changed', { mode });
-    }
-
     if (this.container) {
       const modeBtns = this.container.querySelectorAll('.flow-mode-btn');
       modeBtns.forEach(btn => {
-        const isCurrent = btn.getAttribute('data-mode') === mode;
-        btn.className = `flow-mode-btn px-3 py-1 rounded-lg font-semibold transition-all ${isCurrent ? 'bg-cyan-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-slate-200'}`;
+        const isSelected = btn.getAttribute('data-mode') === mode;
+        btn.className = `flow-mode-btn px-3 py-1 rounded-lg font-semibold transition-all ${
+          isSelected ? 'bg-cyan-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-slate-200'
+        }`;
       });
 
       const statusText = this.container.querySelector('#flow-status-text');
       if (statusText) {
         statusText.textContent = mode === 'current'
-          ? 'High-Velocity Venturi Jet Active (1750 L/h)'
-          : 'Baffled Convection Gyre: Calm Upper Film';
+          ? 'Venturi Jet Active (1750 L/h) • Rheotaxis High-Flow Zone'
+          : '45° Baffled Convection Gyre • Calm Upper Film';
       }
+    }
+
+    if (this.eventBus) {
+      this.eventBus.emit('flow:mode_changed', { mode });
     }
   }
 
   setLighting(light) {
-    if (!FlowEngine.LIGHTING_MODES[light]) return;
+    const modes = FlowEngine.LIGHTING_MODES || FallbackFlowEngine.LIGHTING_MODES;
+    if (!modes[light]) return;
     this.lighting = light;
 
     if (this.container) {
@@ -404,7 +603,7 @@ export class FlowCanvas {
   }
 
   tick() {
-    if (this._isPaused || !this._isVisible) return;
+    if (this._isPaused) return;
 
     this._updatePhysics();
     this.draw();
@@ -434,32 +633,42 @@ export class FlowCanvas {
   }
 
   _updatePhysics() {
-    // 1. Fluid particles
-    if (FlowEngine && typeof FlowEngine.updatePhysics === 'function') {
+    try {
+      // 1. Fluid particles
       FlowEngine.updatePhysics(this.particles, this.mode, { width: this.width, height: this.height });
-    }
 
-    // 2. Living fish AI kinematics
-    if (FlowEngine && typeof FlowEngine.updateFishAI === 'function') {
+      // 2. Living fish AI kinematics
       FlowEngine.updateFishAI(this.fishList, this.mode, this.width, this.height);
-    }
 
-    // 3. Floating/sinking food particles
-    for (let i = this.foodParticles.length - 1; i >= 0; i--) {
-      const f = this.foodParticles[i];
-      f.x += f.vx;
-      f.y += f.vy;
-      f.vy += f.gravity;
-      f.life++;
+      // 3. Floating/sinking food particles
+      for (let i = this.foodParticles.length - 1; i >= 0; i--) {
+        const f = this.foodParticles[i];
+        f.x += f.vx;
+        f.y += f.vy;
+        f.vy += f.gravity;
+        f.life++;
 
-      // Drift in current
-      if (this.mode === 'current' && f.y < this.height * 0.4) {
-        f.vx -= 0.08;
+        if (this.mode === 'current' && f.y < this.height * 0.4) {
+          f.vx -= 0.08;
+        }
+
+        // Check if any fish eats the food
+        for (const fish of this.fishList) {
+          const fx = fish.x * this.width;
+          const fy = (fish.y + (fish.hoverOffset || 0)) * this.height;
+          const dist = Math.hypot(fx - f.x, fy - f.y);
+          if (dist < 28) {
+            f.life = 999; // Eaten
+            break;
+          }
+        }
+
+        if (f.y >= this.height * 0.90 || f.life > 280) {
+          this.foodParticles.splice(i, 1);
+        }
       }
-
-      if (f.y >= this.height * 0.90 || f.life > 300) {
-        this.foodParticles.splice(i, 1);
-      }
+    } catch (err) {
+      console.warn('Physics update caught error:', err);
     }
   }
 
@@ -469,55 +678,64 @@ export class FlowCanvas {
     const w = this.width;
     const h = this.height;
 
-    ctx.clearRect(0, 0, w, h);
+    try {
+      ctx.clearRect(0, 0, w, h);
 
-    const lightScheme = FlowEngine.LIGHTING_MODES[this.lighting] || FlowEngine.LIGHTING_MODES.daylight;
+      const modes = FlowEngine.LIGHTING_MODES || FallbackFlowEngine.LIGHTING_MODES;
+      const lightScheme = modes[this.lighting] || modes.daylight;
 
-    // 1. Water atmosphere gradient & surface ripples
-    this._drawWaterAtmosphere(ctx, w, h, lightScheme);
+      // 1. Water atmosphere gradient & surface ripples
+      this._drawWaterAtmosphere(ctx, w, h, lightScheme);
 
-    // 2. Caustics light network
-    if (this.layers.caustics) {
-      this._drawCaustics(ctx, w, h, lightScheme);
+      // 2. Caustics light network
+      if (this.layers.caustics) {
+        this._drawCaustics(ctx, w, h, lightScheme);
+      }
+
+      // 3. Procedural Aquascape (Substrate, Spiderwood, Moss, Anubias, River Stones, Plants)
+      if (this.layers.hardscape) {
+        this._drawAquascape(ctx, w, h, lightScheme);
+      }
+
+      // 4. Realistic Equipment Layer (Dual Canister Filter, Heater with convection, Overhead LED)
+      if (this.layers.equipment) {
+        this._drawEquipment(ctx, w, h, lightScheme);
+      }
+
+      // 5. Velocity Heatmap overlay
+      if (this.layers.heatmap) {
+        this._drawVelocityHeatmap(ctx, w, h);
+      }
+
+      // 6. Fluid streamlines
+      if (this.layers.streamlines) {
+        this._drawStreamlines(ctx, w, h);
+      }
+
+      // 7. Micro aeration bubbles
+      if (this.layers.bubbles) {
+        this._drawBubbles(ctx);
+      }
+
+      // 8. Living fish with articulated tail waggle and species morphology
+      if (this.layers.fish) {
+        this._drawFishPresence(ctx, w, h);
+      }
+
+      // 9. Interactive feeding drop zones (if enabled)
+      if (this.layers.feedingZones) {
+        this._drawFeedingDropZones(ctx, w, h);
+      }
+
+      // 10. Food particles drifting
+      this._drawFoodParticles(ctx);
+
+      // 11. Glass frame reflections & highlight rim
+      this._drawGlassRimHighlight(ctx, w, h);
+
+    } catch (err) {
+      console.error('FlowCanvas draw error:', err);
     }
-
-    // 3. Procedural Aquascape (Substrate, Spiderwood, Moss, Anubias, River Stones, Plants)
-    if (this.layers.hardscape) {
-      this._drawAquascape(ctx, w, h, lightScheme);
-    }
-
-    // 4. Realistic Equipment Layer (Dual Canister Filter, Heater with convection, Overhead LED)
-    if (this.layers.equipment) {
-      this._drawEquipment(ctx, w, h, lightScheme);
-    }
-
-    // 5. Velocity Heatmap overlay
-    if (this.layers.heatmap) {
-      this._drawVelocityHeatmap(ctx, w, h);
-    }
-
-    // 6. Fluid streamlines
-    if (this.layers.streamlines) {
-      this._drawStreamlines(ctx, w, h);
-    }
-
-    // 7. Micro aeration bubbles
-    if (this.layers.bubbles) {
-      this._drawBubbles(ctx);
-    }
-
-    // 8. Living fish with articulated tail waggle and species morphology
-    if (this.layers.fish) {
-      this._drawFishPresence(ctx, w, h);
-    }
-
-    // 9. Interactive feeding drop zones (if enabled)
-    if (this.layers.feedingZones) {
-      this._drawFeedingDropZones(ctx, w, h);
-    }
-
-    // 10. Food particles drifting
-    this._drawFoodParticles(ctx);
   }
 
   _drawWaterAtmosphere(ctx, w, h, light) {
@@ -540,6 +758,16 @@ export class FlowCanvas {
       else ctx.lineTo(x, y);
     }
     ctx.stroke();
+
+    // Floating water-plant leaves (duckweed / frogbit)
+    ctx.fillStyle = 'rgba(34, 197, 94, 0.45)';
+    for (let f = 0; f < 8; f++) {
+      const fx = (w * 0.12) + (f * 55) + Math.sin(time + f) * 8;
+      const fy = 8 + Math.sin(time + fx * 0.025) * 2.2;
+      ctx.beginPath();
+      ctx.ellipse(fx, fy, 5, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
 
@@ -553,15 +781,15 @@ export class FlowCanvas {
       const curX = (c.x + Math.sin(c.phase) * 40) % (w + 60);
       const grad = ctx.createLinearGradient(curX, 0, curX + c.width * 0.6, h * 0.75);
       grad.addColorStop(0, light.lightRayColor);
-      grad.addColorStop(0.5, 'rgba(103, 232, 249, 0.03)');
+      grad.addColorStop(0.5, 'rgba(103, 232, 249, 0.035)');
       grad.addColorStop(1, 'transparent');
 
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.moveTo(curX, 0);
       ctx.lineTo(curX + c.width, 0);
-      ctx.lineTo(curX + c.width * 1.6 + Math.sin(time + curX * 0.01) * 22, h * 0.80);
-      ctx.lineTo(curX - c.width * 0.4, h * 0.80);
+      ctx.lineTo(curX + c.width * 1.6 + Math.sin(time + curX * 0.01) * 22, h * 0.82);
+      ctx.lineTo(curX - c.width * 0.4, h * 0.82);
       ctx.closePath();
       ctx.fill();
     }
@@ -573,16 +801,16 @@ export class FlowCanvas {
 
     // 1. Background swaying Vallisneria ribbon plants
     const time = Date.now() * 0.0015;
-    const plantColor = this.lighting === 'moonlight' ? 'rgba(30, 64, 175, 0.35)' : 'rgba(16, 185, 129, 0.30)';
+    const plantColor = this.lighting === 'moonlight' ? 'rgba(30, 64, 175, 0.35)' : 'rgba(16, 185, 129, 0.32)';
     ctx.strokeStyle = plantColor;
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 5.5;
     ctx.lineCap = 'round';
 
-    for (let p = 0; p < 6; p++) {
-      const bx = (w * 0.08) + (p * 28);
+    for (let p = 0; p < 7; p++) {
+      const bx = (w * 0.07) + (p * 26);
       const by = h * 0.90;
-      const ph = h * (0.45 + (p % 3) * 0.12);
-      const sway = Math.sin(time + p) * 16;
+      const ph = h * (0.45 + (p % 3) * 0.14);
+      const sway = Math.sin(time + p) * 18;
 
       ctx.beginPath();
       ctx.moveTo(bx, by);
@@ -592,14 +820,14 @@ export class FlowCanvas {
 
     // 2. Emersed trailing Pothos riparium roots entering from top rim
     const rootX = w * 0.72;
-    ctx.strokeStyle = 'rgba(74, 222, 128, 0.45)';
+    ctx.strokeStyle = 'rgba(74, 222, 128, 0.48)';
     ctx.lineWidth = 1.6;
-    for (let r = 0; r < 5; r++) {
+    for (let r = 0; r < 6; r++) {
       const rx = rootX + (r * 9);
       const rSway = Math.sin(time * 0.8 + r) * 6;
       ctx.beginPath();
       ctx.moveTo(rx, 8);
-      ctx.bezierCurveTo(rx + rSway * 0.5, 40, rx - rSway * 0.5, 80, rx + rSway, h * 0.30);
+      ctx.bezierCurveTo(rx + rSway * 0.5, 40, rx - rSway * 0.5, 80, rx + rSway, h * 0.32);
       ctx.stroke();
     }
 
@@ -619,13 +847,23 @@ export class FlowCanvas {
     ctx.closePath();
     ctx.fill();
 
-    // Gravel pebbles
-    ctx.fillStyle = 'rgba(148, 163, 184, 0.4)';
-    for (let i = 0; i < 28; i++) {
-      const px = (i / 28) * w + ((i * 31) % 18);
+    // Gravel pebbles & carpet tufts
+    ctx.fillStyle = 'rgba(148, 163, 184, 0.45)';
+    for (let i = 0; i < 32; i++) {
+      const px = (i / 32) * w + ((i * 31) % 18);
       const py = subY + ((i * 17) % 24);
       ctx.beginPath();
       ctx.arc(px, py, 1.5 + (i % 3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Foreground carpeting plant tufts (Monte Carlo)
+    ctx.fillStyle = '#16a34a';
+    for (let c = 0; c < 14; c++) {
+      const cx = (c / 14) * (w * 0.7) + 20;
+      const cy = subY - 2 + (c % 3) * 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -644,58 +882,61 @@ export class FlowCanvas {
     ctx.lineJoin = 'round';
 
     // Main Trunk
-    ctx.lineWidth = 16;
+    ctx.lineWidth = 17;
     ctx.beginPath();
     ctx.moveTo(trunkX, trunkY);
     ctx.bezierCurveTo(trunkX - 15, h * 0.72, trunkX + 20, h * 0.58, trunkX, h * 0.46);
     ctx.stroke();
 
-    // Left Branch (Zone A shelter)
-    ctx.lineWidth = 9;
+    // Left Branch
+    ctx.lineWidth = 10;
     ctx.beginPath();
     ctx.moveTo(trunkX - 5, h * 0.62);
     ctx.bezierCurveTo(trunkX - 45, h * 0.56, w * 0.34, h * 0.50, w * 0.28, h * 0.44);
     ctx.stroke();
 
-    // Right Horizontal Branch (Holding moss into current)
-    ctx.lineWidth = 8;
+    // Right Horizontal Branch
+    ctx.lineWidth = 9;
     ctx.beginPath();
     ctx.moveTo(trunkX + 6, h * 0.58);
     ctx.bezierCurveTo(trunkX + 50, h * 0.54, w * 0.60, h * 0.48, w * 0.66, h * 0.52);
     ctx.stroke();
 
-    // Java Moss Clump swaying in stream
+    // Secondary Root tendrils
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(trunkX - 12, h * 0.70);
+    ctx.lineTo(w * 0.38, subY);
+    ctx.moveTo(trunkX + 14, h * 0.68);
+    ctx.lineTo(w * 0.56, subY);
+    ctx.stroke();
+
+    // Java Moss Clump
     const mossX = w * 0.62;
     const mossY = h * 0.50;
     const mossSway = Math.sin(time * 3) * 2;
     ctx.fillStyle = '#15803d';
     ctx.beginPath();
-    ctx.ellipse(mossX, mossY, 22, 13, mossSway * 0.05, 0, Math.PI * 2);
+    ctx.ellipse(mossX, mossY, 24, 14, mossSway * 0.05, 0, Math.PI * 2);
     ctx.fill();
 
     // Moss highlights
     ctx.fillStyle = '#22c55e';
-    for (let m = 0; m < 6; m++) {
+    for (let m = 0; m < 7; m++) {
       ctx.beginPath();
-      ctx.arc(mossX - 10 + (m * 4) + mossSway, mossY - 4 + ((m * 5) % 8), 2.2, 0, Math.PI * 2);
+      ctx.arc(mossX - 12 + (m * 4) + mossSway, mossY - 4 + ((m * 5) % 8), 2.2, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Anubias Epiphytes mounted on wood joints
-    const leafClusters = [
-      { x: trunkX - 10, y: h * 0.58, angle: -0.4 },
-      { x: trunkX + 10, y: h * 0.48, angle: 0.3 },
-      { x: w * 0.32, y: h * 0.46, angle: -0.5 }
-    ];
-
-    leafClusters.forEach(c => {
-      this._drawAnubiasCluster(ctx, c.x, c.y, c.angle);
-    });
+    // Anubias Epiphytes
+    this._drawAnubiasCluster(ctx, trunkX - 10, h * 0.58, -0.4);
+    this._drawAnubiasCluster(ctx, trunkX + 10, h * 0.48, 0.3);
+    this._drawAnubiasCluster(ctx, w * 0.32, h * 0.46, -0.5);
 
     // 5. Basalt River Boulder Sanctuary
-    this._drawRiverRock(ctx, w * 0.38, subY, 32, 16, '#1e293b', '#475569');
-    this._drawRiverRock(ctx, w * 0.54, subY + 2, 36, 18, '#0f172a', '#334155');
-    this._drawRiverRock(ctx, w * 0.46, subY + 4, 24, 12, '#334155', '#64748b');
+    this._drawRiverRock(ctx, w * 0.38, subY, 34, 17, '#1e293b', '#475569');
+    this._drawRiverRock(ctx, w * 0.54, subY + 2, 38, 19, '#0f172a', '#334155');
+    this._drawRiverRock(ctx, w * 0.46, subY + 4, 25, 13, '#334155', '#64748b');
 
     ctx.restore();
   }
@@ -736,13 +977,11 @@ export class FlowCanvas {
 
   _drawRiverRock(ctx, rx, ry, rw, rh, cDark, cLight) {
     ctx.save();
-    // Drop shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.beginPath();
     ctx.ellipse(rx, ry + rh * 0.4, rw * 1.05, rh * 0.35, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Rock body
     const rGrad = ctx.createRadialGradient(rx - rw * 0.2, ry - rh * 0.3, rh * 0.2, rx, ry, rw);
     rGrad.addColorStop(0, cLight);
     rGrad.addColorStop(0.7, cDark);
@@ -753,7 +992,6 @@ export class FlowCanvas {
     ctx.ellipse(rx, ry, rw, rh, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Specular highlight rim
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -763,16 +1001,9 @@ export class FlowCanvas {
     ctx.restore();
   }
 
-  /**
-   * Realistic Hardware Rendering:
-   * - Dual-Canister internal filter unit with visible media cups
-   * - Powerhead motor with pulsing telemetry LED & outflow venturi nozzle
-   * - Submersible titanium heater with nichrome glow & thermal shimmer
-   * - Overhead full-spectrum LED light bar
-   */
   _drawEquipment(ctx, w, h, light) {
     ctx.save();
-    const bounds = FlowEngine.getEquipmentBounds(w, h);
+    const bounds = FlowEngine.getEquipmentBounds ? FlowEngine.getEquipmentBounds(w, h) : FallbackFlowEngine.getEquipmentBounds(w, h);
 
     // 1. Overhead LED Light Fixture Bar
     const led = bounds.led;
@@ -780,11 +1011,10 @@ export class FlowCanvas {
     ctx.strokeStyle = '#475569';
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(led.x, led.y, led.w, led.h, 3) : ctx.rect(led.x, led.y, led.w, led.h);
+    safeDrawRect(ctx, led.x, led.y, led.w, led.h, 3);
     ctx.fill();
     ctx.stroke();
 
-    // Emitted LED light array dots
     const ledColor = this.lighting === 'daylight' ? '#38bdf8' : this.lighting === 'sunset' ? '#f59e0b' : '#6366f1';
     ctx.fillStyle = ledColor;
     for (let lx = led.x + 15; lx < led.x + led.w - 15; lx += 22) {
@@ -793,57 +1023,61 @@ export class FlowCanvas {
       ctx.fill();
     }
 
-    // 2. Submersible Heater
+    // 2. Submersible Quartz Heater
     const heater = bounds.heater;
-    // Glass cylinder
     const heatGrad = ctx.createLinearGradient(heater.x, heater.y, heater.x + heater.w, heater.y);
-    heatGrad.addColorStop(0, 'rgba(15, 23, 42, 0.85)');
-    heatGrad.addColorStop(0.5, 'rgba(51, 65, 85, 0.50)');
-    heatGrad.addColorStop(1, 'rgba(15, 23, 42, 0.85)');
+    heatGrad.addColorStop(0, 'rgba(15, 23, 42, 0.88)');
+    heatGrad.addColorStop(0.5, 'rgba(51, 65, 85, 0.52)');
+    heatGrad.addColorStop(1, 'rgba(15, 23, 42, 0.88)');
     ctx.fillStyle = heatGrad;
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.4)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(heater.x, heater.y, heater.w, heater.h, 6) : ctx.rect(heater.x, heater.y, heater.w, heater.h);
+    safeDrawRect(ctx, heater.x, heater.y, heater.w, heater.h, 6);
     ctx.fill();
     ctx.stroke();
 
-    // Glowing Nichrome heating coil filament
+    // Suction mounting brackets
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(heater.x - 3, heater.y + 10, heater.w + 6, 6);
+    ctx.fillRect(heater.x - 3, heater.y + heater.h - 22, heater.w + 6, 6);
+
+    // Glowing heating coil
     ctx.strokeStyle = '#ef4444';
     ctx.lineWidth = 1.6;
     ctx.beginPath();
-    const coilYStart = heater.y + 20;
-    const coilYEnd = heater.y + heater.h - 15;
+    const coilYStart = heater.y + 22;
+    const coilYEnd = heater.y + heater.h - 26;
     for (let cy = coilYStart; cy < coilYEnd; cy += 6) {
       ctx.moveTo(heater.x + 3, cy);
       ctx.lineTo(heater.x + heater.w - 3, cy + 3);
     }
     ctx.stroke();
 
-    // Thermal convection shimmer rising above heater
+    // Thermal convection shimmer waves rising from heater
     const time = Date.now() * 0.003;
-    ctx.strokeStyle = 'rgba(239, 68, 68, 0.18)';
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.22)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    for (let ty = heater.y - 5; ty > 15; ty -= 5) {
+    for (let ty = heater.y - 4; ty > 14; ty -= 5) {
       const tx = heater.x + heater.w * 0.5 + Math.sin(time + ty * 0.08) * 3;
-      if (ty === heater.y - 5) ctx.moveTo(tx, ty);
+      if (ty === heater.y - 4) ctx.moveTo(tx, ty);
       else ctx.lineTo(tx, ty);
     }
     ctx.stroke();
 
     // 3. Wide Dual-Canister Internal Filter Unit
     const filter = bounds.filter;
-    // Motorhead (top block)
+    // Motorhead
     ctx.fillStyle = '#0f172a';
     ctx.strokeStyle = '#06b6d4';
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(filter.x, filter.y, filter.w, 42, [8, 8, 2, 2]) : ctx.rect(filter.x, filter.y, filter.w, 42);
+    safeDrawRect(ctx, filter.x, filter.y, filter.w, 42, 6);
     ctx.fill();
     ctx.stroke();
 
-    // Motor telemetry status LED (pulsing cyan)
+    // Pulsing LED indicator
     const pulse = 0.5 + Math.sin(Date.now() * 0.005) * 0.5;
     ctx.fillStyle = `rgba(6, 182, 212, ${pulse})`;
     ctx.shadowColor = '#06b6d4';
@@ -851,9 +1085,8 @@ export class FlowCanvas {
     ctx.beginPath();
     ctx.arc(filter.x + filter.w - 14, filter.y + 14, 3, 0, Math.PI * 2);
     ctx.fill();
-    ctx.shadowBlur = 0; // reset
+    ctx.shadowBlur = 0;
 
-    // Powerhead impeller label
     ctx.fillStyle = '#e2e8f0';
     ctx.font = 'bold 9px ui-sans-serif, system-ui, sans-serif';
     ctx.fillText('1750 L/h', filter.x + 8, filter.y + 18);
@@ -861,7 +1094,7 @@ export class FlowCanvas {
     ctx.fillStyle = '#94a3b8';
     ctx.fillText('DUAL CUP', filter.x + 8, filter.y + 30);
 
-    // Outflow Nozzle shooting left
+    // Directional Venturi Jet Nozzle
     const nozzleX = filter.x;
     const nozzleY = filter.y + 22;
     ctx.fillStyle = '#1e293b';
@@ -876,22 +1109,22 @@ export class FlowCanvas {
     ctx.fill();
     ctx.stroke();
 
-    // Clear transparent Canister Body with dual media cups
+    // Clear Canister Body
     const bodyY = filter.y + 44;
     const bodyH = filter.h - 44;
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.70)';
-    ctx.strokeStyle = 'rgba(103, 232, 249, 0.35)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
+    ctx.strokeStyle = 'rgba(103, 232, 249, 0.38)';
     ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(filter.x + 2, bodyY, filter.w - 4, bodyH, [2, 2, 6, 6]) : ctx.rect(filter.x + 2, bodyY, filter.w - 4, bodyH);
+    safeDrawRect(ctx, filter.x + 2, bodyY, filter.w - 4, bodyH, 4);
     ctx.fill();
     ctx.stroke();
 
-    // Media Cup A: Mechanical Coarse Sponge (Dark porous block)
+    // Cup A: Sponge
     const cupAH = bodyH * 0.46;
     ctx.fillStyle = '#1e293b';
     ctx.strokeStyle = 'rgba(71, 85, 105, 0.6)';
     ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(filter.x + 6, bodyY + 4, filter.w - 12, cupAH, 4) : ctx.rect(filter.x + 6, bodyY + 4, filter.w - 12, cupAH);
+    safeDrawRect(ctx, filter.x + 6, bodyY + 4, filter.w - 12, cupAH, 4);
     ctx.fill();
     ctx.stroke();
 
@@ -899,18 +1132,17 @@ export class FlowCanvas {
     ctx.font = '8px ui-sans-serif, system-ui, sans-serif';
     ctx.fillText('CUP A: SPONGE', filter.x + 9, bodyY + 16);
 
-    // Media Cup B: Biological Ceramic Bio-Rings
+    // Cup B: Ceramic
     const cupBY = bodyY + cupAH + 8;
     const cupBH = bodyH - cupAH - 12;
     ctx.fillStyle = '#0f172a';
-    ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)';
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
     ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(filter.x + 6, cupBY, filter.w - 12, cupBH, 4) : ctx.rect(filter.x + 6, cupBY, filter.w - 12, cupBH);
+    safeDrawRect(ctx, filter.x + 6, cupBY, filter.w - 12, cupBH, 4);
     ctx.fill();
     ctx.stroke();
 
-    // Ceramic rings texture dots
-    ctx.fillStyle = 'rgba(248, 250, 252, 0.75)';
+    ctx.fillStyle = 'rgba(248, 250, 252, 0.8)';
     for (let r = 0; r < 8; r++) {
       const rx = filter.x + 12 + ((r * 11) % (filter.w - 24));
       const ry = cupBY + 10 + (Math.floor(r / 3) * 12);
@@ -929,7 +1161,6 @@ export class FlowCanvas {
     ctx.globalAlpha = 0.28;
 
     if (this.mode === 'current') {
-      // High-velocity jet stream (Red/Orange)
       const jetGrad = ctx.createRadialGradient(w - 150, h * 0.15, 10, w * 0.35, h * 0.20, w * 0.5);
       jetGrad.addColorStop(0, 'rgba(239, 68, 68, 0.85)');
       jetGrad.addColorStop(0.4, 'rgba(245, 158, 11, 0.65)');
@@ -937,7 +1168,6 @@ export class FlowCanvas {
       ctx.fillStyle = jetGrad;
       ctx.fillRect(0, 0, w, h);
 
-      // Slack calm pocket under filter (Emerald sanctuary)
       const slackGrad = ctx.createRadialGradient(w - 75, h * 0.78, 5, w - 75, h * 0.78, 130);
       slackGrad.addColorStop(0, 'rgba(16, 185, 129, 0.85)');
       slackGrad.addColorStop(1, 'transparent');
@@ -946,7 +1176,6 @@ export class FlowCanvas {
       ctx.arc(w - 75, h * 0.78, 130, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      // Baffled convection gyre
       const convGrad = ctx.createRadialGradient(w * 0.5, h * 0.46, 25, w * 0.5, h * 0.46, w * 0.42);
       convGrad.addColorStop(0, 'transparent');
       convGrad.addColorStop(0.6, 'rgba(6, 182, 212, 0.65)');
@@ -960,12 +1189,12 @@ export class FlowCanvas {
 
   _drawStreamlines(ctx, w, h) {
     ctx.save();
-    ctx.strokeStyle = this.mode === 'current' ? 'rgba(56, 189, 248, 0.35)' : 'rgba(45, 212, 191, 0.35)';
+    ctx.strokeStyle = this.mode === 'current' ? 'rgba(56, 189, 248, 0.38)' : 'rgba(45, 212, 191, 0.38)';
     ctx.lineWidth = 1.6;
     ctx.setLineDash([8, 12]);
     ctx.lineDashOffset = -Date.now() * 0.024;
 
-    const lines = FlowEngine.getStreamlines(this.mode, w, h);
+    const lines = FlowEngine.getStreamlines ? FlowEngine.getStreamlines(this.mode, w, h) : FallbackFlowEngine.getStreamlines(this.mode, w, h);
     for (const l of lines) {
       ctx.beginPath();
       if (l.type === 'bezier') {
@@ -988,7 +1217,6 @@ export class FlowCanvas {
       ctx.arc(p.x, p.y, p.size || 1.6, 0, Math.PI * 2);
       ctx.fill();
 
-      // Specular highlight dot
       ctx.fillStyle = `rgba(255, 255, 255, ${(p.alpha || 0.65) * 0.9})`;
       ctx.beginPath();
       ctx.arc(p.x - (p.size || 1.6) * 0.3, p.y - (p.size || 1.6) * 0.3, (p.size || 1.6) * 0.35, 0, Math.PI * 2);
@@ -997,10 +1225,6 @@ export class FlowCanvas {
     ctx.restore();
   }
 
-  /**
-   * Living fish locomotion & morphological silhouette rendering:
-   * Angelfish, Neon Tetras (with glowing lateral stripe), Denison Barbs, Corydoras, Bettas
-   */
   _drawFishPresence(ctx, w, h) {
     ctx.save();
 
@@ -1008,23 +1232,31 @@ export class FlowCanvas {
       const px = f.x * w;
       const py = (f.y + (f.hoverOffset || 0)) * h;
 
-      // Facing orientation: rheotaxis (orient into flow when in current mode)
       const isFacingLeft = this.mode === 'current' || f.x > 0.45;
+      const isHovered = this.hoveredFish && this.hoveredFish.id === f.id;
 
       ctx.save();
       ctx.translate(px, py);
       if (!isFacingLeft) ctx.scale(-1, 1);
 
-      // Tail oscillation waggle
       const tailAngle = f.currentTailAngle || 0;
-
-      // Render species-specific anatomical morphology
       this._renderSpeciesMorphology(ctx, f, tailAngle);
 
-      ctx.restore(); // reset local translation
+      // Glow halo on hover
+      if (isHovered) {
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, (f.size || 16) * 1.5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
 
-      // Name & count badge
-      this._renderFishBadge(ctx, f, px, py);
+      ctx.restore();
+
+      // Only render badge if layer is explicitly enabled OR if fish is hovered
+      if (this.layers.labels || isHovered) {
+        this._renderFishBadge(ctx, f, px, py);
+      }
     }
 
     ctx.restore();
@@ -1034,57 +1266,108 @@ export class FlowCanvas {
     const s = f.size || 16;
 
     if (f.species === 'cichlid') {
-      // Angelfish: Majestic vertical diamond body, high dorsal fin, thread pelvic fins
+      // Tall, elegant Angelfish vertical disc
       ctx.fillStyle = f.color;
       ctx.beginPath();
       ctx.moveTo(-s * 0.5, 0);
-      ctx.lineTo(0, -s * 0.9); // Tall dorsal peak
-      ctx.lineTo(s * 0.6, 0);   // Nose
-      ctx.lineTo(0, s * 0.9);  // Deep belly
+      ctx.lineTo(0, -s * 0.9);
+      ctx.lineTo(s * 0.6, 0);
+      ctx.lineTo(0, s * 0.9);
       ctx.closePath();
       ctx.fill();
 
-      // Long thread-like pelvic fins
+      // Long trailing ventral threads
       ctx.strokeStyle = f.secondaryColor || '#ffffff';
-      ctx.lineWidth = 1.2;
+      ctx.lineWidth = 1.3;
       ctx.beginPath();
       ctx.moveTo(0, s * 0.8);
-      ctx.lineTo(-s * 0.2, s * 1.5);
+      ctx.lineTo(-s * 0.2, s * 1.6);
       ctx.stroke();
 
-      // Tail
+      // Eye
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(s * 0.35, -s * 0.2, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Articulated caudal tail
       ctx.save();
       ctx.translate(-s * 0.5, 0);
       ctx.rotate(tailAngle);
-      ctx.fillStyle = `${f.color}80`;
+      ctx.fillStyle = `${f.color}85`;
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.lineTo(-s * 0.6, -s * 0.5);
-      ctx.lineTo(-s * 0.4, 0);
-      ctx.lineTo(-s * 0.6, s * 0.5);
+      ctx.lineTo(-s * 0.65, -s * 0.5);
+      ctx.lineTo(-s * 0.45, 0);
+      ctx.lineTo(-s * 0.65, s * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+    } else if (f.species === 'barb') {
+      // Denison Barb (Roseline Shark): Torpedo body, vivid red lateral stripe, gold line
+      ctx.fillStyle = '#334155';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, s * 0.85, s * 0.30, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Belly silver
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.ellipse(0, s * 0.12, s * 0.75, s * 0.16, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Crimson snout-to-flank stripe
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.moveTo(s * 0.85, 0);
+      ctx.lineTo(s * 0.1, -s * 0.12);
+      ctx.lineTo(s * 0.1, s * 0.05);
+      ctx.lineTo(s * 0.85, s * 0.05);
+      ctx.closePath();
+      ctx.fill();
+
+      // Gold highlight line
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(s * 0.8, -s * 0.08);
+      ctx.lineTo(-s * 0.6, -s * 0.08);
+      ctx.stroke();
+
+      // Tail with black/yellow tips
+      ctx.save();
+      ctx.translate(-s * 0.75, 0);
+      ctx.rotate(tailAngle);
+      ctx.fillStyle = 'rgba(250, 204, 21, 0.85)';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(-s * 0.5, -s * 0.4);
+      ctx.lineTo(-s * 0.3, 0);
+      ctx.lineTo(-s * 0.5, s * 0.4);
       ctx.closePath();
       ctx.fill();
       ctx.restore();
 
     } else if (f.species === 'tetra') {
-      // Neon Tetra: Torpedo shape with glowing iridescent blue-green stripe & red belly
+      // Neon / Silvertip Tetra: Glowing electric blue stripe & ruby red tail
       ctx.fillStyle = '#0f172a';
       ctx.beginPath();
       ctx.ellipse(0, 0, s * 0.65, s * 0.32, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Glowing iridescent electric blue lateral line
+      // Iridescent electric cyan stripe
       ctx.strokeStyle = '#22d3ee';
       ctx.shadowColor = '#22d3ee';
-      ctx.shadowBlur = 4;
-      ctx.lineWidth = 1.6;
+      ctx.shadowBlur = 5;
+      ctx.lineWidth = 1.8;
       ctx.beginPath();
       ctx.moveTo(-s * 0.4, -1);
       ctx.lineTo(s * 0.4, -1);
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // Vivid red posterior tail section
+      // Ruby red lower flank
       ctx.fillStyle = '#ef4444';
       ctx.beginPath();
       ctx.moveTo(0, 0);
@@ -1094,11 +1377,11 @@ export class FlowCanvas {
       ctx.closePath();
       ctx.fill();
 
-      // Articulated tail fin
+      // Waggling tail
       ctx.save();
       ctx.translate(-s * 0.55, 0);
       ctx.rotate(tailAngle);
-      ctx.fillStyle = 'rgba(248, 250, 252, 0.6)';
+      ctx.fillStyle = 'rgba(248, 250, 252, 0.65)';
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.lineTo(-s * 0.45, -s * 0.3);
@@ -1109,21 +1392,32 @@ export class FlowCanvas {
       ctx.restore();
 
     } else if (f.species === 'cory') {
-      // Corydoras: Downward-angled head, flat belly, whisker barbels
+      // Albino Corydoras: snuffling barbels on substrate
       ctx.fillStyle = f.color;
       ctx.beginPath();
-      ctx.ellipse(0, 0, s * 0.7, s * 0.4, -0.1, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, s * 0.72, s * 0.42, -0.1, 0, Math.PI * 2);
       ctx.fill();
 
-      // Whiskers (barbels) at mouth
+      // Barbels
       ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.moveTo(s * 0.5, 2);
-      ctx.lineTo(s * 0.75, 5);
+      ctx.lineTo(s * 0.8, 6);
+      ctx.moveTo(s * 0.45, 3);
+      ctx.lineTo(s * 0.72, 7);
       ctx.stroke();
 
-      // Oscillating caudal tail
+      // Pinkish dorsal fin
+      ctx.fillStyle = `${f.secondaryColor || '#f472b6'}80`;
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.35);
+      ctx.lineTo(-s * 0.3, -s * 0.7);
+      ctx.lineTo(-s * 0.4, -s * 0.35);
+      ctx.closePath();
+      ctx.fill();
+
+      // Caudal tail
       ctx.save();
       ctx.translate(-s * 0.6, 0);
       ctx.rotate(tailAngle);
@@ -1138,19 +1432,17 @@ export class FlowCanvas {
       ctx.restore();
 
     } else {
-      // Default sleek community fish (Barbs, Bettas, Rainbows)
+      // Generic sleek aquatic fish
       ctx.fillStyle = f.color;
       ctx.beginPath();
       ctx.ellipse(0, 0, s * 0.75, s * 0.35, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Eye
       ctx.fillStyle = '#000000';
       ctx.beginPath();
       ctx.arc(s * 0.4, -1, 1.5, 0, Math.PI * 2);
       ctx.fill();
 
-      // Oscillating caudal tail
       ctx.save();
       ctx.translate(-s * 0.65, 0);
       ctx.rotate(tailAngle);
@@ -1167,27 +1459,26 @@ export class FlowCanvas {
   }
 
   _renderFishBadge(ctx, f, px, py) {
-    const text = `${f.name} (x${f.count})`;
+    const text = `${f.name} (×${f.count})`;
     ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
     const textWidth = ctx.measureText(text).width;
     const boxW = textWidth + 14;
     const boxH = 17;
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.90)';
     ctx.strokeStyle = f.color;
     ctx.lineWidth = 1;
 
     ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(px - boxW / 2, py - boxH / 2, boxW, boxH, 6) : ctx.rect(px - boxW / 2, py - boxH / 2, boxW, boxH);
+    safeDrawRect(ctx, px - boxW / 2, py - boxH / 2 - 16, boxW, boxH, 6);
     ctx.fill();
     ctx.stroke();
 
     ctx.fillStyle = '#f8fafc';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    ctx.fillText(text, px, py);
+    ctx.fillText(text, px, py - 16);
 
-    // Comfort indicator badge
     if (f.flowPreference === 'low') {
       const isStressed = this.mode === 'current';
       ctx.font = '8px ui-sans-serif, system-ui, sans-serif';
@@ -1238,11 +1529,15 @@ export class FlowCanvas {
     ctx.restore();
   }
 
-  /**
-   * Drops animated food particles into the tank at coordinates
-   * @param {number} x
-   * @param {number} y
-   */
+  _drawGlassRimHighlight(ctx, w, h) {
+    ctx.save();
+    // Low-iron rimless glass bevel edge highlight
+    ctx.strokeStyle = 'rgba(103, 232, 249, 0.22)';
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
+    ctx.restore();
+  }
+
   dropFood(x, y) {
     for (let i = 0; i < 8; i++) {
       this.foodParticles.push({
@@ -1258,18 +1553,45 @@ export class FlowCanvas {
     }
   }
 
+  _handleMouseMove(event) {
+    if (!this.canvas) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const mx = event.clientX - rect.left;
+    const my = event.clientY - rect.top;
+    this.mousePos = { x: mx, y: my };
+
+    // Check if mouse is over any fish
+    let found = null;
+    for (const f of this.fishList) {
+      const fx = f.x * this.width;
+      const fy = (f.y + (f.hoverOffset || 0)) * this.height;
+      const dist = Math.hypot(mx - fx, my - fy);
+      if (dist < 28) {
+        found = f;
+        break;
+      }
+    }
+    this.hoveredFish = found;
+  }
+
+  _handleMouseLeave() {
+    this.hoveredFish = null;
+    this.mousePos = { x: -100, y: -100 };
+  }
+
   _handleCanvasClick(event) {
     if (!this.canvas) return;
     const rect = this.canvas.getBoundingClientRect();
     const clickX = event.clientX - rect.left;
     const clickY = event.clientY - rect.top;
 
-    // Check equipment click
-    const bounds = FlowEngine.getEquipmentBounds(this.width, this.height);
+    const bounds = FlowEngine.getEquipmentBounds ? FlowEngine.getEquipmentBounds(this.width, this.height) : FallbackFlowEngine.getEquipmentBounds(this.width, this.height);
+
+    // 1. Filter click
     if (this._isPointInRect(clickX, clickY, bounds.filter)) {
       this._showHUD('⚙️ 1750 L/h Dual Canister Filter', `
         <div class="space-y-1.5">
-          <p><strong class="text-cyan-300">Turnover:</strong> 1750 L/Hr (~8x hourly tank volume)</p>
+          <p><strong class="text-cyan-300">Turnover:</strong> 1750 L/Hr (~8× hourly tank volume)</p>
           <p><strong class="text-cyan-300">Cup A:</strong> Mechanical Coarse Foam (traps suspended detritus)</p>
           <p><strong class="text-emerald-300">Cup B:</strong> Sintered Ceramic Bio-Rings (active biological nitrification)</p>
           <p class="text-amber-300">💡 Alternating Rinse: Never rinse both cups in the same week.</p>
@@ -1278,62 +1600,58 @@ export class FlowCanvas {
       return;
     }
 
+    // 2. Heater click
     if (this._isPointInRect(clickX, clickY, bounds.heater)) {
-      this._showHUD('🔥 200W Submersible Heater', `
+      this._showHUD('🔥 Submersible Quartz Heater', `
         <div class="space-y-1.5">
-          <p><strong class="text-cyan-300">Target Range:</strong> 25.5°C – 26.0°C</p>
-          <p><strong class="text-cyan-300">Wattage:</strong> 200 Watts (Quartz Submersible)</p>
-          <p><strong class="text-cyan-300">Placement:</strong> Directly beside filter intake for uniform heat dispersion.</p>
+          <p><strong class="text-rose-300">Target Temp:</strong> 25.5°C ± 1.0°C</p>
+          <p><strong class="text-slate-300">Coil:</strong> Nichrome element with thermal convection roll</p>
+          <p class="text-emerald-300">✅ Thermostat synchronized with Vital Signs Strip.</p>
         </div>
       `);
       return;
     }
 
-    if (this._isPointInRect(clickX, clickY, bounds.led)) {
-      this._showHUD('💡 Overhead Slim Full-Spectrum LED', `
-        <div class="space-y-1.5">
-          <p><strong class="text-cyan-300">Photoperiod:</strong> 6.5 Hours / Day Max</p>
-          <p><strong class="text-cyan-300">Spectrum:</strong> Full 6500K daylight with 460nm actinic diodes.</p>
-          <p class="text-amber-300">💡 Auto Ramp: Turns off 15m prior to room lights to prevent fish jumping.</p>
-        </div>
-      `);
-      return;
-    }
-
-    // Check fish click
+    // 3. Fish click
     for (const f of this.fishList) {
       const fx = f.x * this.width;
-      const fy = f.y * this.height;
-      if (Math.hypot(clickX - fx, clickY - fy) < 25) {
-        this._showHUD(`🐠 ${f.name} (x${f.count})`, `
+      const fy = (f.y + (f.hoverOffset || 0)) * this.height;
+      if (Math.hypot(clickX - fx, clickY - fy) < 32) {
+        this._showHUD(`🐠 ${f.name} (×${f.count})`, `
           <div class="space-y-1.5">
-            <p><strong class="text-cyan-300">Swimming Strata:</strong> ${f.zone?.toUpperCase()} column</p>
-            <p><strong class="text-cyan-300">Flow Preference:</strong> <span class="capitalize font-semibold text-amber-300">${f.flowPreference} flow</span></p>
-            <p><strong class="text-cyan-300">Locomotion:</strong> ${f.species === 'tetra' ? 'Synchronized schooling cluster' : f.species === 'cory' ? 'Gravel substrate benthic forager' : 'Mid-water glide'}</p>
-            <p class="text-slate-300">${f.isSheltering ? '⚠️ Currently sheltering from high-velocity venturi stream.' : '✅ Actively swimming comfortably.'}</p>
+            <p><strong class="text-cyan-300">Strata Zone:</strong> ${f.zone?.toUpperCase() || 'MID'}</p>
+            <p><strong class="text-cyan-300">Flow Preference:</strong> ${f.flowPreference?.toUpperCase() || 'MODERATE'}</p>
+            <p><strong class="text-slate-300">Behavior:</strong> ${
+              f.flowPreference === 'low' && this.mode === 'current'
+                ? 'Sheltering in calm pocket behind spiderwood'
+                : f.flowPreference === 'high'
+                  ? 'Actively swimming against current (positive rheotaxis)'
+                  : 'Peaceful community schooling'
+            }</p>
           </div>
         `);
         return;
       }
     }
 
-    // If clicked empty water, drop a pinch of food!
+    // 4. Default click in open water: drop food!
     this.dropFood(clickX, clickY);
-    this._hideHUD();
   }
 
-  _isPointInRect(px, py, rect) {
-    return px >= rect.x && px <= rect.x + rect.w && py >= rect.y && py <= rect.y + rect.h;
+  _isPointInRect(x, y, rect) {
+    if (!rect) return false;
+    return x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h;
   }
 
   _showHUD(title, html) {
     if (!this.container) return;
     const hud = this.container.querySelector('#canvas-hud-overlay');
-    const hudTitle = this.container.querySelector('#hud-title');
-    const hudBody = this.container.querySelector('#hud-body');
-    if (hud && hudTitle && hudBody) {
-      hudTitle.innerHTML = title;
-      hudBody.innerHTML = html;
+    const titleEl = this.container.querySelector('#hud-title');
+    const bodyEl = this.container.querySelector('#hud-body');
+
+    if (hud && titleEl && bodyEl) {
+      titleEl.innerHTML = title;
+      bodyEl.innerHTML = html;
       hud.classList.remove('hidden');
     }
   }
@@ -1344,19 +1662,3 @@ export class FlowCanvas {
     if (hud) hud.classList.add('hidden');
   }
 }
-
-// Global attachment for browser scripts
-if (typeof globalThis !== 'undefined') {
-  globalThis.FlowCanvas = FlowCanvas;
-}
-if (typeof window !== 'undefined') {
-  window.FlowCanvas = FlowCanvas;
-}
-
-// CommonJS export
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { FlowCanvas };
-  module.exports.default = FlowCanvas;
-}
-
-export default FlowCanvas;

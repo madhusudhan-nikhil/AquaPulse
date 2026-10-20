@@ -468,3 +468,10 @@ if (typeof module !== 'undefined' && module.exports) {
 if (typeof window !== 'undefined') {
   window.FlowEngine = FlowEngine;
 }
+if (typeof globalThis !== 'undefined') {
+  globalThis.FlowEngine = FlowEngine;
+}
+
+export { FlowEngine };
+export default FlowEngine;
+
