@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AquaPulse — Responsive Ecosystem & Aquatic Management Architecture</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌊</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            aqua: {
+              950: '#04131d',
+              900: '#082032',
+              800: '#0f3148',
+              700: '#164666',
+              500: '#06b6d4',
+              400: '#22d3ee',
+              300: '#67e8f9'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      background: radial-gradient(circle at top right, #0c2b40 0%, #04131d 65%, #020a10 100%);
+      color: #e2e8f0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .glass-card {
+      background: rgba(15, 49, 72, 0.45);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(103, 232, 249, 0.16);
+    }
+    .tank-glass {
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.14) 0%, rgba(6, 182, 212, 0.18) 72%, rgba(15, 23, 42, 0.95) 86%, #090d14 100%);
+      box-shadow: inset 0 12px 30px rgba(255,255,255,0.08), 0 12px 35px rgba(0,0,0,0.6);
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.97); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.15s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div id="app"></div>
+
+  <!-- Modern ES Module Bootstrap -->
+  <script type="module">
+    import { EventBus } from './src/core/event-bus.js';
+    import { AquaPulseStore } from './src/core/store.js';
+    import { ConfigManager } from './src/core/config-manager.js';
+    import { PluginRegistry } from './src/core/plugin-registry.js';
+    import { TelemetryHAL } from './src/telemetry/telemetry-hal.js';
+    import { SampleSensorPlugin } from './src/plugins/sample-sensor-plugin.js';
+    import { AppShell } from './src/ui/app-shell.js';
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      // 1. Initialize EventBus
+      const eventBus = new EventBus();
+
+      // 2. Initialize ConfigManager
+      const configManager = new ConfigManager({ eventBus });
+      let config = null;
+
+      // Ingest default & private configs if available in global scope or storage
+      try {
+        config = configManager.loadConfig();
+      } catch (e) {
+        console.warn('Using standard fallback configuration:', e);
+        config = {
+          tank: { id: 'tank-255l', name: '255L Command Ecosystem', volumeNetL: 220, filterFlowLph: 1750 },
+          targets: {
+            temp: { min: 24.5, max: 26.5, target: 25.5 },
+            ph: { min: 6.6, max: 7.4, target: 7.1 },
+            gh: { min: 4, max: 12 },
+            kh: { min: 3, max: 8 }
+          },
+          species: [
+            { id: 'denison-barb', name: 'Denison Barb', count: 6 },
+            { id: 'silver-tip-tetra', name: 'Silver Tip Tetra', count: 12 },
+            { id: 'albino-corydoras', name: 'Albino Corydoras', count: 6 },
+            { id: 'female-betta', name: 'Female Betta', count: 1 },
+            { id: 'zebra-nerite-snail', name: 'Zebra Nerite Snail', count: 4 }
+          ]
+        };
+      }
+
+      // 3. Initialize Centralized Reactive Store
+      const store = new AquaPulseStore({
+        ...config,
+        telemetry: {
+          current: {
+            temp: 25.6,
+            ph: 7.1,
+            nh3: 0.0,
+            no2: 0.0,
+            no3: 15.0,
+            gh: 7.0,
+            kh: 4.0,
+            orpMv: 340,
+            flowRateLph: 1750
+          },
+          status: 'OPTIMAL'
+        }
+      }, eventBus);
+
+      // 4. Initialize Plugin Registry & Register Verified Sample Sensor Plugin
+      const pluginRegistry = new PluginRegistry();
+      pluginRegistry.register(SampleSensorPlugin);
+
+      // 5. Initialize Telemetry HAL
+      const telemetryHal = new TelemetryHAL({
+        store,
+        eventBus,
+        tankId: config?.tank?.id || 'tank-255l'
+      });
+
+      // 6. Instantiate & Mount AppShell
+      const appContainer = document.getElementById('app');
+      const appShell = new AppShell({
+        store,
+        eventBus,
+        configManager,
+        pluginRegistry,
+        telemetryHal
+      });
+
+      appShell.mount(appContainer);
+
+      // Global reference for diagnostics or console inspection
+      window.__AQUAPULSE__ = {
+        store,
+        eventBus,
+        configManager,
+        pluginRegistry,
+        telemetryHal,
+        appShell
+      };
+    });
+  </script>
+</body>
+</html>

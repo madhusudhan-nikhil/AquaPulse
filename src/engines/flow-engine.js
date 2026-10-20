@@ -1,11 +1,58 @@
 /**
- * AquaPulse FlowEngine
+ * AquaPulse FlowEngine (Enhanced 10x Edition)
  * Pure biological & hydrodynamic calculation engine for aquarium fluid simulation.
  * Zero DOM / browser dependencies — 100% headless testable.
+ *
+ * Capabilities:
+ * - Multi-mode vector field calculation (Straight Jet, Baffled Convection)
+ * - Hydrodynamic obstacle avoidance and wall deflection
+ * - Living fish locomotion & rheotaxis AI (swimming against current, seeking calm shelter)
+ * - Schooling flocking dynamics (boids-lite cohesion & alignment)
+ * - Equipment operating states (filter impeller RPM, heater thermal gradient, LED spectrum)
+ * - Floating & sinking food particle kinematics
  */
 
 const FlowEngine = {
-  particleCount: 85,
+  particleCount: 120,
+
+  /**
+   * Environmental lighting spectrum presets
+   */
+  LIGHTING_MODES: {
+    daylight: {
+      id: 'daylight',
+      name: '☀️ Daylight (6500K)',
+      tempK: 6500,
+      ambientTop: 'rgba(6, 182, 212, 0.10)',
+      ambientMid: 'rgba(14, 116, 144, 0.14)',
+      ambientBottom: 'rgba(2, 6, 23, 0.65)',
+      causticAlpha: 0.14,
+      shimmerColor: 'rgba(207, 250, 254, 0.20)',
+      lightRayColor: 'rgba(255, 255, 255, 0.15)'
+    },
+    sunset: {
+      id: 'sunset',
+      name: '🌅 Sunset / Dusk (3000K)',
+      tempK: 3000,
+      ambientTop: 'rgba(245, 158, 11, 0.14)',
+      ambientMid: 'rgba(180, 83, 9, 0.16)',
+      ambientBottom: 'rgba(15, 23, 42, 0.80)',
+      causticAlpha: 0.08,
+      shimmerColor: 'rgba(254, 215, 170, 0.22)',
+      lightRayColor: 'rgba(251, 191, 36, 0.12)'
+    },
+    moonlight: {
+      id: 'moonlight',
+      name: '🌙 Moonlight / Actinic (460nm)',
+      tempK: 12000,
+      ambientTop: 'rgba(30, 58, 138, 0.25)',
+      ambientMid: 'rgba(15, 23, 42, 0.35)',
+      ambientBottom: 'rgba(2, 6, 23, 0.90)',
+      causticAlpha: 0.04,
+      shimmerColor: 'rgba(147, 197, 253, 0.15)',
+      lightRayColor: 'rgba(96, 165, 250, 0.08)'
+    }
+  },
 
   /**
    * Calculates filter outflow nozzle coordinates based on container dimensions.
@@ -24,6 +71,34 @@ const FlowEngine = {
     return {
       x: width - (width > 600 ? 155 : 135),
       y: height * 0.15
+    };
+  },
+
+  /**
+   * Calculates equipment physical bounding boxes for rendering & collision
+   * @param {number} width
+   * @param {number} height
+   */
+  getEquipmentBounds(width = 800, height = 384) {
+    const filterW = width > 600 ? 76 : 64;
+    const filterH = Math.min(height * 0.72, 240);
+    const filterX = width - filterW - 16;
+    const filterY = 18;
+
+    const heaterW = 18;
+    const heaterH = filterH * 0.78;
+    const heaterX = filterX - 26;
+    const heaterY = filterY + 12;
+
+    const ledH = 10;
+    const ledX = width * 0.12;
+    const ledW = width * 0.76;
+    const ledY = 2;
+
+    return {
+      filter: { x: filterX, y: filterY, w: filterW, h: filterH },
+      heater: { x: heaterX, y: heaterY, w: heaterW, h: heaterH },
+      led: { x: ledX, y: ledY, w: ledW, h: ledH }
     };
   },
 
@@ -163,6 +238,82 @@ const FlowEngine = {
    */
   updateParticles(particles, mode = 'current', width = 800, height = 384, dt = 1) {
     return this.updatePhysics(particles, mode, { width, height });
+  },
+
+  /**
+   * Updates living fish positions, swimming locomotion, and behavioral shelter AI.
+   * High-flow fish orient into the stream (rheotaxis); low-flow fish retreat to shelter in high-current mode.
+   * @param {Array<Object>} fishList Roster of fish objects
+   * @param {string} mode 'current' | 'baffled'
+   * @param {number} width
+   * @param {number} height
+   */
+  updateFishAI(fishList, mode = 'current', width = 800, height = 384) {
+    if (!fishList || !Array.isArray(fishList)) return [];
+
+    const now = Date.now();
+
+    for (let i = 0; i < fishList.length; i++) {
+      const f = fishList[i];
+      if (!f) continue;
+
+      // Determine target position based on flow mode and biological preference
+      let targetX = f.baseX !== undefined ? f.baseX : (f.x || 0.5);
+      let targetY = f.baseY !== undefined ? f.baseY : (f.y || 0.5);
+
+      if (f.flowPreference === 'low') {
+        if (mode === 'current') {
+          // Retreat to bottom-right slack pocket beneath filter canisters
+          targetX = 0.84;
+          targetY = 0.82;
+          f.isSheltering = true;
+        } else {
+          // Baffled mode: comfortable roaming upper canopy
+          targetX = f.baffledX || (f.baseX || 0.35);
+          targetY = f.baffledY || (f.baseY || 0.30);
+          f.isSheltering = false;
+        }
+      } else if (f.flowPreference === 'high') {
+        // High flow lover: actively holds position directly in the upper jet stream
+        if (mode === 'current') {
+          targetX = 0.62 + Math.sin(now * 0.001 + i) * 0.08;
+          targetY = 0.22 + Math.cos(now * 0.0015 + i) * 0.04;
+          f.isSheltering = false;
+        } else {
+          targetX = f.baffledX || (f.baseX || 0.50);
+          targetY = f.baffledY || (f.baseY || 0.40);
+        }
+      } else if (f.species === 'bottom') {
+        // Bottom dwellers: forage across substrate
+        targetX = f.baseX || (0.2 + (i * 0.15));
+        targetY = 0.90 + Math.sin(now * 0.002 + i) * 0.02;
+      }
+
+      // Smooth interpolation toward target
+      const lerpSpeed = f.isSheltering ? 0.04 : 0.025;
+      f.x = (f.x || targetX) + (targetX - (f.x || targetX)) * lerpSpeed;
+      f.y = (f.y || targetY) + (targetY - (f.y || targetY)) * lerpSpeed;
+
+      // Natural hovering oscillation
+      f.hoverOffset = Math.sin(now * 0.003 + i * 1.5) * 0.015;
+
+      // Articulated tail oscillation speed based on exertion
+      const baseTailSpeed = f.tailSpeed || 3.0;
+      const exertion = (mode === 'current' && f.flowPreference === 'high') ? 1.6 : 1.0;
+      f.currentTailAngle = Math.sin(now * 0.006 * baseTailSpeed * exertion + i) * (0.28 * exertion);
+
+      // Schooling micro-offsets for schoolers
+      if (f.isSchooler && i > 0 && fishList[i - 1]?.isSchooler) {
+        const leader = fishList[i - 1];
+        const dist = Math.hypot((f.x - leader.x) * width, (f.y - leader.y) * height);
+        if (dist > 60) {
+          f.x += (leader.x - f.x) * 0.01;
+          f.y += (leader.y - f.y) * 0.01;
+        }
+      }
+    }
+
+    return fishList;
   },
 
   /**

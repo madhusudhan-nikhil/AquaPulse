@@ -63,17 +63,43 @@ AquaPulse is a lightweight, zero-dependency aquarium command dashboard for fresh
 
 ```text
 AquaPulse/
-├── assets/
-│   └── aquapulse-banner.jpg   # Project showcase hero banner
-├── AquaPulse.html             # Dynamic UI, interactive tank map, form controls & tabs
+├── AquaPulse.html             # Overhauled modular presentation shell (ES modules)
+├── index.html                 # Modern entry point
 ├── aquapulse.config.js        # Default demo configuration (120L community template)
 ├── aquapulse.private.js       # 🔒 Your personal tank config (git-ignored, optional)
-├── aquapulse.flow.js          # Live canvas flow simulator, bubbles, heatmap & fish presence
-├── aquapulse.optimizer.js     # Standalone inhabitants search & parameter sweet-spot optimizer
-├── aquapulse.intelligence.js  # Visual symptom checker, quarantine manager & predictive engine
 ├── .gitignore                 # Ignores private config file
-└── README.md                  # Architecture documentation & customization manual
+├── EXTENDING.md               # Developer and plugin author extension guide
+├── PROJECT.md                 # Complete 4-tier architectural specification
+├── src/                       # Modular ES Source Tree
+│   ├── core/                  # Reactive Store, EventBus, ConfigManager, PluginRegistry
+│   ├── engines/               # Pure calculation engines (Flow, Optimizer, Care, Meds, Diag)
+│   ├── telemetry/             # Telemetry Hardware Abstraction Layer (HAL)
+│   ├── plugins/               # Extensible plugin system & sample sensor plugin
+│   └── ui/                    # AppShell, ModalManager, and isolated view components
+├── tests/                     # Automated E2E verification test suite (129 tests)
+└── README.md                  # Project documentation & usage manual
 ```
+
+---
+
+## 🧪 Automated Testing & Verification
+
+AquaPulse includes an automated, zero-dependency test runner with 129 test cases covering all core foundation modules, boundary conditions, and cross-feature interactions:
+
+```bash
+# Run the complete test suite (Tiers 1–4)
+node tests/run-tests.js
+
+# Run core foundation and calculation engine unit tests
+node tests/verify-m1-core.js
+node tests/verify-m2-engines.js
+```
+
+---
+
+## 🔌 Extensibility & Custom Plugins
+
+To add custom IoT sensors, lighting calculators, or new biological species, refer to [`EXTENDING.md`](./EXTENDING.md) for full tutorials and API reference.
 
 ---
 

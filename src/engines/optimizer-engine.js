@@ -578,6 +578,7 @@ const OptimizerEngine = {
     let totalBioLoad = 0;
 
     for (const sp of speciesList) {
+      if (!sp) continue;
       const prof = this.resolveSpeciesProfile(sp);
       const count = Number(sp.count) || 1;
       const bioloadUnit = prof ? (prof.bioload || 2.0) : 2.0;
